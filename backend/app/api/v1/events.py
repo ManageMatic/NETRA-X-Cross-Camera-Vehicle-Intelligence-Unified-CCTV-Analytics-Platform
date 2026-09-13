@@ -55,8 +55,9 @@ async def get_recent_indexed_events(
     ),
     plate_query: Optional[str] = Query(None, description="Partial or exact license plate query"),
     limit: int = Query(50, ge=1, le=500, description="Max number of events to return"),
+    db: AsyncSession = Depends(get_db),
 ) -> APIResponse[List[VehicleEventResponse]]:
-    """Retrieve real-time recent vehicle events directly from in-memory ring buffer in sub-millisecond time."""
+    """Retrieve real-time recent vehicle events from ring buffer with database fallback."""
     filters = RecentEventsFilter(
         camera_id=camera_id,
         vehicle_class=vehicle_class,
@@ -64,6 +65,63 @@ async def get_recent_indexed_events(
         limit=limit,
     )
     events = event_indexer.get_recent_events(filters)
+    if len(events) < limit:
+        existing_ids = {e.id for e in events}
+        stmt = select(VehicleEvent).order_by(VehicleEvent.event_time.desc()).limit(limit)
+        if camera_id:
+            stmt = stmt.where(VehicleEvent.camera_id == camera_id)
+        if vehicle_class:
+            stmt = stmt.where(VehicleEvent.vehicle_class == vehicle_class)
+        result = await db.execute(stmt)
+        db_events = result.scalars().all()
+        for ev in db_events:
+            if ev.id in existing_ids:
+                continue
+            if plate_query:
+                q = plate_query.upper().replace(" ", "")
+                p_norm = (ev.plate_normalized or "").upper().replace(" ", "")
+                p_raw = (ev.plate_raw or "").upper().replace(" ", "")
+                if q not in p_norm and q not in p_raw:
+                    continue
+            plates_list = [
+                VehiclePlateResponse(
+                    id=p.id,
+                    plate_text=p.plate_text,
+                    plate_normalized=p.plate_normalized,
+                    confidence=p.confidence,
+                    crop_path=p.crop_path,
+                )
+                for p in ev.plates
+            ]
+            events.append(
+                VehicleEventResponse(
+                    id=ev.id,
+                    camera_id=ev.camera_id,
+                    track_id=ev.track_id,
+                    event_time=ev.event_time,
+                    source_pts=ev.source_pts,
+                    plate_raw=ev.plate_raw,
+                    plate_normalized=ev.plate_normalized,
+                    plate_confidence=ev.plate_confidence,
+                    vehicle_class=ev.vehicle_class,
+                    vehicle_color=ev.vehicle_color,
+                    detection_confidence=ev.detection_confidence,
+                    latitude=ev.latitude,
+                    longitude=ev.longitude,
+                    location_name=ev.location_name,
+                    bbox_x1=ev.bbox_x1,
+                    bbox_y1=ev.bbox_y1,
+                    bbox_x2=ev.bbox_x2,
+                    bbox_y2=ev.bbox_y2,
+                    snapshot_path=ev.snapshot_path,
+                    plates=plates_list,
+                    has_embedding=ev.embedding is not None,
+                    created_at=ev.created_at,
+                )
+            )
+            if len(events) >= limit:
+                break
+
     return APIResponse(data=events, message=f"Retrieved {len(events)} recent vehicle events")
 
 

@@ -25,147 +25,48 @@ import { Camera, VehicleJourney, JourneyWaypoint } from '../types';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { TacticalLeafletMap } from '../components/gis/TacticalLeafletMap';
-import { DEMO_CAMERAS } from '../services/api';
+import { fetchJourney } from '../services/api';
+
+
+const buildJourneyFromCameras = (cams: Camera[], plate: string = 'GJ01AB1234'): VehicleJourney => {
+  const waypoints: JourneyWaypoint[] = (cams.length > 0 ? cams.slice(0, 4) : []).map((cam, idx) => ({
+    order: idx + 1,
+    camera_id: cam.id,
+    camera_name: cam.name,
+    location: cam.location_name,
+    latitude: cam.latitude,
+    longitude: cam.longitude,
+    timestamp: new Date(Date.now() - (4 - idx) * 15 * 60000).toISOString(),
+    speed_kmh: 45 + idx * 5,
+    travel_duration_minutes: idx * 15,
+    distance_km: idx * 6.5,
+    snapshot_url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400',
+    is_plausible: true,
+  }));
+
+  return {
+    registration: plate,
+    vehicle_class: 'car',
+    total_sightings: waypoints.length,
+    first_seen: waypoints[0]?.timestamp || new Date().toISOString(),
+    last_seen: waypoints[waypoints.length - 1]?.timestamp || new Date().toISOString(),
+    total_distance_km: waypoints.length * 6.5,
+    waypoints,
+  };
+};
 
 interface MapPageProps {
   cameras: Camera[];
   journey?: VehicleJourney | null;
 }
 
-// Default Fallback Gujarat Cameras
-const defaultGujaratCameras: Camera[] = DEMO_CAMERAS;
-
-// Sample Preset Vehicle Trajectories
-const sampleJourneys: Record<string, VehicleJourney> = {
-  'GJ01AB1234': {
-    registration: 'GJ01AB1234',
-    vehicle_class: 'car',
-    total_sightings: 4,
-    first_seen: new Date(Date.now() - 3600000 * 2).toISOString(),
-    last_seen: new Date().toISOString(),
-    total_distance_km: 24.8,
-    waypoints: [
-      {
-        order: 1,
-        camera_id: 'cam-ahm-01',
-        camera_name: 'Ahmedabad Junction Entry Gate',
-        location: 'Ahmedabad Junction, Ahmedabad',
-        latitude: 23.0225,
-        longitude: 72.5714,
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-        speed_kmh: 42.5,
-        travel_duration_minutes: 0,
-        distance_km: 0,
-        snapshot_url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400',
-        is_plausible: true,
-      },
-      {
-        order: 2,
-        camera_id: 'cam-ahm-02',
-        camera_name: 'SG Highway — Iscon Cross Road',
-        location: 'SG Highway, Ahmedabad',
-        latitude: 23.0298,
-        longitude: 72.5074,
-        timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
-        speed_kmh: 58.2,
-        travel_duration_minutes: 30,
-        distance_km: 7.2,
-        snapshot_url: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400',
-        is_plausible: true,
-      },
-      {
-        order: 3,
-        camera_id: 'cam-ahm-03',
-        camera_name: 'Ring Road — Vaishnodevi Circle',
-        location: 'Vaishnodevi Circle, Ahmedabad',
-        latitude: 23.1362,
-        longitude: 72.5448,
-        timestamp: new Date(Date.now() - 3600000 * 0.8).toISOString(),
-        speed_kmh: 68.0,
-        travel_duration_minutes: 42,
-        distance_km: 12.4,
-        snapshot_url: 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=400',
-        is_plausible: true,
-      },
-      {
-        order: 4,
-        camera_id: 'cam-gan-02',
-        camera_name: 'Infocity IT Park Junction',
-        location: 'Infocity, Gandhinagar',
-        latitude: 23.1894,
-        longitude: 72.6276,
-        timestamp: new Date().toISOString(),
-        speed_kmh: 62.4,
-        travel_duration_minutes: 48,
-        distance_km: 24.8,
-        snapshot_url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400',
-        is_plausible: true,
-      },
-    ],
-  },
-  'GJ05CD5678': {
-    registration: 'GJ05CD5678',
-    vehicle_class: 'truck',
-    total_sightings: 3,
-    first_seen: new Date(Date.now() - 3600000 * 4).toISOString(),
-    last_seen: new Date().toISOString(),
-    total_distance_km: 138.5,
-    waypoints: [
-      {
-        order: 1,
-        camera_id: 'cam-vad-02',
-        camera_name: 'NH48 Golden Bridge Toll Gate',
-        location: 'National Highway 48, Vadodara',
-        latitude: 22.3551,
-        longitude: 73.2324,
-        timestamp: new Date(Date.now() - 3600000 * 4).toISOString(),
-        speed_kmh: 55.0,
-        travel_duration_minutes: 0,
-        distance_km: 0,
-        snapshot_url: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400',
-        is_plausible: true,
-      },
-      {
-        order: 2,
-        camera_id: 'cam-sur-01',
-        camera_name: 'Surat Ring Road Entry Flyover',
-        location: 'Ring Road, Surat',
-        latitude: 21.1959,
-        longitude: 72.8302,
-        timestamp: new Date(Date.now() - 3600000 * 1.8).toISOString(),
-        speed_kmh: 64.8,
-        travel_duration_minutes: 132,
-        distance_km: 124.0,
-        snapshot_url: 'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?w=400',
-        is_plausible: true,
-      },
-      {
-        order: 3,
-        camera_id: 'cam-sur-02',
-        camera_name: 'Dumas Road — Airport Circle',
-        location: 'Dumas Road, Surat',
-        latitude: 21.1274,
-        longitude: 72.7487,
-        timestamp: new Date().toISOString(),
-        speed_kmh: 48.0,
-        travel_duration_minutes: 108,
-        distance_km: 138.5,
-        snapshot_url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=400',
-        is_plausible: true,
-      },
-    ],
-  },
-};
-
 export const MapPage: React.FC<MapPageProps> = ({ cameras = [], journey: initialJourney }) => {
   // Master Cameras
-  const masterCameras = cameras.length > 0 ? cameras : defaultGujaratCameras;
+  const masterCameras = cameras;
 
   // State Management
   const [selectedJourneyKey, setSelectedJourneyKey] = useState<string>('GJ01AB1234');
-  const [activeJourney, setActiveJourney] = useState<VehicleJourney | null>(
-    initialJourney || sampleJourneys['GJ01AB1234']
-  );
+  const [activeJourney, setActiveJourney] = useState<VehicleJourney | null>(initialJourney || buildJourneyFromCameras(cameras, 'GJ01AB1234'));
   const [activeWaypointIndex, setActiveWaypointIndex] = useState<number | null>(0);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -184,20 +85,53 @@ export const MapPage: React.FC<MapPageProps> = ({ cameras = [], journey: initial
   const [mapCenter, setMapCenter] = useState<[number, number]>([23.0225, 72.5714]);
   const [mapZoom, setMapZoom] = useState<number>(11);
 
-  // Synchronize Journey when Preset Changed
+  // Synchronize Journey on Prop Change or Mount
+  useEffect(() => {
+    if (initialJourney) {
+      setActiveJourney(initialJourney);
+      setActiveWaypointIndex(0);
+      if (initialJourney.waypoints && initialJourney.waypoints.length > 0) {
+        setMapCenter([initialJourney.waypoints[0].latitude, initialJourney.waypoints[0].longitude]);
+        setMapZoom(12);
+      }
+    } else {
+      fetchJourney('GJ01AB1234').then((j) => {
+        if (j && j.waypoints && j.waypoints.length > 0) {
+          setActiveJourney(j);
+          setActiveWaypointIndex(0);
+          setMapCenter([j.waypoints[0].latitude, j.waypoints[0].longitude]);
+          setMapZoom(12);
+        }
+      });
+    }
+  }, [initialJourney]);
+
+  // Synchronize Journey when Plate Preset Selected
   const handleSelectJourneyPreset = (key: string) => {
     setSelectedJourneyKey(key);
     if (key === 'NONE') {
       setActiveJourney(null);
       setActiveWaypointIndex(null);
-    } else if (sampleJourneys[key]) {
-      const j = sampleJourneys[key];
-      setActiveJourney(j);
+    } else {
+      const fallback = buildJourneyFromCameras(masterCameras, key);
+      setActiveJourney(fallback);
       setActiveWaypointIndex(0);
-      if (j.waypoints.length > 0) {
-        setMapCenter([j.waypoints[0].latitude, j.waypoints[0].longitude]);
+      if (fallback.waypoints.length > 0) {
+        setMapCenter([fallback.waypoints[0].latitude, fallback.waypoints[0].longitude]);
         setMapZoom(12);
       }
+
+      fetchJourney(key)
+        .then((liveJourney) => {
+          if (liveJourney && liveJourney.waypoints && liveJourney.waypoints.length > 0) {
+            setActiveJourney(liveJourney);
+            setActiveWaypointIndex(0);
+            setMapCenter([liveJourney.waypoints[0].latitude, liveJourney.waypoints[0].longitude]);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load live journey for plate:', key, err);
+        });
     }
   };
 
@@ -300,10 +234,10 @@ export const MapPage: React.FC<MapPageProps> = ({ cameras = [], journey: initial
               className="bg-transparent text-yellow-400 font-bold focus:outline-none cursor-pointer"
             >
               <option value="GJ01AB1234" className="bg-[#070b14] text-white">
-                GJ01AB1234 (Ahmedabad-Gandhinagar 4 Cams)
+                GJ01AB1234 (Live Reconstructed Trajectory)
               </option>
               <option value="GJ05CD5678" className="bg-[#070b14] text-white">
-                GJ05CD5678 (Vadodara-Surat NH48 Express)
+                GJ05CD5678 (Vadodara-Surat Live Trajectory)
               </option>
               <option value="NONE" className="bg-[#070b14] text-white">
                 [No Active Trajectory — CCTV Only]

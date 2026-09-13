@@ -456,6 +456,31 @@ class WatchlistMatchingEngine:
             created_at=alert.created_at,
         )
 
+    async def get_entries(
+        self, db: AsyncSession, watchlist_id: Optional[str] = None
+    ) -> List[WatchlistEntryResponse]:
+        stmt = select(WatchlistEntry).order_by(WatchlistEntry.created_at.desc())
+        if watchlist_id:
+            stmt = stmt.where(WatchlistEntry.watchlist_id == watchlist_id)
+        result = await db.execute(stmt)
+        entries = result.scalars().all()
+        return [
+            WatchlistEntryResponse(
+                id=e.id,
+                watchlist_id=e.watchlist_id,
+                registration_number=e.registration_number,
+                registration_normalized=e.registration_normalized,
+                category=e.category,
+                priority=e.priority,
+                is_active=e.is_active,
+                notes=e.notes,
+                created_by=e.created_by,
+                created_at=e.created_at,
+                updated_at=e.updated_at,
+            )
+            for e in entries
+        ]
+
     def get_telemetry(self) -> WatchlistTelemetry:
         """Retrieve real-time watchlist evaluation throughput and latency metrics."""
         with self._lock:

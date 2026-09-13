@@ -85,6 +85,16 @@ async def bulk_import_hotlist(
     )
 
 
+@router.get("/entries", response_model=APIResponse[List[WatchlistEntryResponse]])
+async def list_watchlist_entries(
+    watchlist_id: Optional[str] = Query(None, description="Optional filter by watchlist UUID"),
+    db: AsyncSession = Depends(get_db),
+) -> APIResponse[List[WatchlistEntryResponse]]:
+    """Fetch all active hotlist vehicle plate entries."""
+    entries = await watchlist_service.get_entries(db, watchlist_id=watchlist_id)
+    return APIResponse(data=entries, message=f"Retrieved {len(entries)} watchlist entries")
+
+
 @router.get("/alerts", response_model=APIResponse[List[AlertResponse]])
 async def list_hotlist_alerts(
     limit: int = Query(50, ge=1, le=200, description="Max alerts to return"),
