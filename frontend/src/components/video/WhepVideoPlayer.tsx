@@ -41,7 +41,7 @@ export const WhepVideoPlayer: React.FC<WhepVideoPlayerProps> = ({
   const hlsInstanceRef = useRef<Hls | null>(null);
 
   // Player State: 'live' (Real RTSP Video Feed), 'hls' (Cloud CDN Stream), 'ai_canvas' (AI Overlay)
-  const [streamMode, setStreamMode] = useState<'live' | 'hls' | 'ai_canvas'>('hls');
+  const [streamMode, setStreamMode] = useState<'live' | 'hls' | 'ai_canvas'>('live');
   const [isPlayingLive, setIsPlayingLive] = useState(false);
   const [isLiveLoaded, setIsLiveLoaded] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -74,6 +74,26 @@ export const WhepVideoPlayer: React.FC<WhepVideoPlayerProps> = ({
   const camId = camera.external_camera_id.toLowerCase().replace(/[^a-z0-9]/g, '');
   const directStreamUrl = `/api/cameras/${camId}/stream?t=${reconnectCount}`;
   const hlsStreamUrl = `/cctv-hls/${camId}/index.m3u8`;
+  const [liveFrameSrc, setLiveFrameSrc] = useState<string>(`/api/cameras/${camId}/snapshot?t=${Date.now()}`);
+
+  // In Multi-Grid mode (!isFocused), poll live snapshots to avoid browser 6 HTTP/1.1 socket limit across 30 tiles.
+  // In Focused mode (isFocused), stream high-rate direct MJPEG stream.
+  useEffect(() => {
+    if (streamMode !== 'live') return;
+
+    if (isFocused) {
+      setLiveFrameSrc(`/api/cameras/${camId}/stream?t=${reconnectCount}`);
+      return;
+    }
+
+    setLiveFrameSrc(`/api/cameras/${camId}/snapshot?t=${Date.now()}_${reconnectCount}`);
+
+    const interval = setInterval(() => {
+      setLiveFrameSrc(`/api/cameras/${camId}/snapshot?t=${Date.now()}`);
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [camId, streamMode, isFocused, reconnectCount]);
 
   // HLS stream handler when in Cloud HLS mode
   useEffect(() => {
@@ -262,7 +282,7 @@ export const WhepVideoPlayer: React.FC<WhepVideoPlayerProps> = ({
         {/* Mode 1: Direct Live Stream from RTSP Ingestion Pipeline */}
         {streamMode === 'live' && (
           <img
-            src={directStreamUrl}
+            src={liveFrameSrc}
             alt={camera.name}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
               isLiveLoaded ? 'opacity-100' : 'opacity-0'
@@ -276,7 +296,9 @@ export const WhepVideoPlayer: React.FC<WhepVideoPlayerProps> = ({
               setStreamError(null);
             }}
             onError={() => {
-              setIsLiveLoaded(false);
+              if (liveFrameSrc.includes('/stream')) {
+                setLiveFrameSrc(`/api/cameras/${camId}/snapshot?t=${Date.now()}`);
+              }
             }}
           />
         )}

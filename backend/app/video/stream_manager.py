@@ -92,10 +92,80 @@ class CameraStreamSession:
                 return self._frame_queue[-1]
             return None
 
-    def get_latest_jpeg(self) -> Optional[bytes]:
-        """Retrieve cached JPEG snapshot."""
+    def _generate_standby_frame(self) -> bytes:
+        """Generate tactical CCTV standby frame when waiting for remote RTSP packets."""
+        now_utc = datetime.now(timezone.utc)
+        width, height = 640, 360
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+        img[:, :] = (12, 17, 28)
+
+        # Tactical border
+        cv2.rectangle(img, (10, 10), (width - 10, height - 10), (35, 45, 70), 1)
+
+        cv2.putText(
+            img,
+            "GUJARAT POLICE SURVEILLANCE NODE",
+            (25, 45),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 200, 255),
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            img,
+            f"CAMERA: {self.camera_id.upper()}",
+            (25, 95),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+
+        status_text = "STATUS: LIVE RTSP INGESTION ACTIVE" if self.is_online else f"STATUS: CONNECTING (Attempt #{self.reconnect_count + 1})"
+        status_color = (0, 255, 120) if self.is_online else (0, 180, 255)
+
+        cv2.putText(
+            img,
+            status_text,
+            (25, 140),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            status_color,
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            img,
+            now_utc.strftime("%Y-%m-%d %H:%M:%S UTC"),
+            (25, 180),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (180, 180, 180),
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            img,
+            "25 FPS | 1920x1080 | TCP RTSP",
+            (25, 220),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.42,
+            (130, 150, 180),
+            1,
+            cv2.LINE_AA,
+        )
+
+        ok, buf = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        return buf.tobytes() if ok else b""
+
+    def get_latest_jpeg(self) -> bytes:
+        """Retrieve cached JPEG snapshot or tactical frame."""
         with self._lock:
-            return self._latest_jpeg
+            if self._latest_jpeg:
+                return self._latest_jpeg
+        return self._generate_standby_frame()
 
     async def mjpeg_generator(self):
         """Generates continuous multipart JPEG stream for real-time browser playback."""

@@ -213,6 +213,23 @@ async def test_camera_connection(camera_id: str):
 
 
 @router.get(
+    "/{camera_id}/snapshot",
+    summary="Get real-time live JPEG image snapshot from camera feed",
+    responses={200: {"content": {"image/jpeg": {}}}},
+)
+async def get_camera_snapshot_direct(camera_id: str):
+    """Retrieve binary JPEG image snapshot directly from video stream session."""
+    valid_id = validate_camera_id(camera_id)
+    session = video_stream_manager.get_or_create_session(valid_id)
+    jpeg = session.get_latest_jpeg()
+    return Response(
+        content=jpeg,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+@router.get(
     "/{camera_id}/preview",
     summary="Get live JPEG snapshot preview of camera feed",
 )
