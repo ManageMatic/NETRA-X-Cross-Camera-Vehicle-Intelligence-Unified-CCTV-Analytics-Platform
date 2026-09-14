@@ -266,7 +266,7 @@ export async function fetchJourney(plateNumber: string): Promise<VehicleJourney>
   try {
     const res = await request<any>('/api/v1/journey/reconstruct', {
       method: 'POST',
-      body: JSON.stringify({ plate_number: cleanPlate }),
+      body: JSON.stringify({ plate: cleanPlate, plate_number: cleanPlate }),
     });
 
     if (res && res.timeline && Array.isArray(res.timeline)) {
@@ -322,6 +322,7 @@ export async function searchVehicles(filters: {
     const res = await request<any>('/api/v1/search/vehicles', {
       method: 'POST',
       body: JSON.stringify({
+        plate: filters.plate,
         plate_number: filters.plate,
         vehicle_class: filters.vehicle_class,
         color: filters.color,
@@ -329,8 +330,9 @@ export async function searchVehicles(filters: {
         time_to: filters.date_to,
       }),
     });
-    if (res && Array.isArray(res.items)) {
-      return res.items.map((ev: any) => ({
+    const items = res?.results || res?.items || (Array.isArray(res) ? res : []);
+    if (Array.isArray(items) && items.length > 0) {
+      return items.map((ev: any) => ({
         id: ev.id,
         camera_id: ev.camera_id,
         camera_name: ev.location_name || `CAM-${ev.camera_id.slice(0, 8)}`,

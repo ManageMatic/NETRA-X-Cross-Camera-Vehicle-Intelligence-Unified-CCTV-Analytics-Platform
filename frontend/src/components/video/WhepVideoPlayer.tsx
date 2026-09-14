@@ -41,7 +41,7 @@ export const WhepVideoPlayer: React.FC<WhepVideoPlayerProps> = ({
   const hlsInstanceRef = useRef<Hls | null>(null);
 
   // Player State: 'live' (Real RTSP Video Feed), 'hls' (Cloud CDN Stream), 'ai_canvas' (AI Overlay)
-  const [streamMode, setStreamMode] = useState<'live' | 'hls' | 'ai_canvas'>('live');
+  const [streamMode, setStreamMode] = useState<'live' | 'hls' | 'ai_canvas'>('hls');
   const [isPlayingLive, setIsPlayingLive] = useState(false);
   const [isLiveLoaded, setIsLiveLoaded] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
@@ -107,8 +107,20 @@ export const WhepVideoPlayer: React.FC<WhepVideoPlayerProps> = ({
         video.play().catch(() => {});
       });
 
-      hls.on(Hls.Events.ERROR, () => {
-        setStreamMode('live');
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              hls?.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hls?.recoverMediaError();
+              break;
+            default:
+              setStreamMode('live');
+              break;
+          }
+        }
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = hlsStreamUrl;
